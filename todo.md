@@ -60,3 +60,12 @@
 - [x] Bundle sample files with application
 - [x] Add "Load Sample" button to UI
 - [x] Create sample data loader functionality
+
+## Bug Fixes
+- [ ] Debug DICOM image display issue in browser
+- [ ] Fix Cornerstone rendering initialization
+- [ ] Verify image loading and viewport rendering
+
+## UI Fixes
+- [x] Fix button overlap in header
+- [x] Improve header layout spacing

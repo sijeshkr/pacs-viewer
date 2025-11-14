@@ -250,9 +250,9 @@ export default function Viewer() {
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Header */}
-      <header className="border-b border-border px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-bold text-foreground">Medical PACS Viewer</h1>
+      <header className="border-b border-border px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg md:text-xl font-bold text-foreground">Medical PACS Viewer</h1>
           <input
             ref={fileInputRef}
             type="file"
@@ -261,22 +261,26 @@ export default function Viewer() {
             onChange={handleFileUpload}
             className="hidden"
           />
-          <Button
-            onClick={() => fileInputRef.current?.click()}
-            variant="outline"
-            size="sm"
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Load DICOM
-          </Button>
-          <Button
-            onClick={loadSampleFiles}
-            variant="outline"
-            size="sm"
-          >
-            <FileImage className="w-4 h-4 mr-2" />
-            Load Samples
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              variant="outline"
+              size="sm"
+            >
+              <Upload className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Load DICOM</span>
+              <span className="sm:hidden">DICOM</span>
+            </Button>
+            <Button
+              onClick={loadSampleFiles}
+              variant="outline"
+              size="sm"
+            >
+              <FileImage className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Load Samples</span>
+              <span className="sm:hidden">Samples</span>
+            </Button>
+          </div>
         </div>
         
         <div className="flex items-center gap-2">
