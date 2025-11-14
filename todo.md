@@ -62,10 +62,25 @@
 - [x] Create sample data loader functionality
 
 ## Bug Fixes
-- [ ] Debug DICOM image display issue in browser
-- [ ] Fix Cornerstone rendering initialization
-- [ ] Verify image loading and viewport rendering
+- [x] Debug DICOM image display issue in browser
+- [x] Fix Cornerstone rendering initialization
+- [x] Verify image loading and viewport rendering
 
 ## UI Fixes
 - [x] Fix button overlap in header
 - [x] Improve header layout spacing
+
+## New Pages & Features
+- [x] Upgrade to server template with database support
+- [x] Create Dashboard page for doctors
+- [x] Create Patients list page
+- [ ] Create Patient detail page
+- [x] Create Studies/Cases list page
+- [ ] Create Study detail page with viewer
+- [x] Add navigation sidebar/header
+- [ ] Create login/authentication page
+- [ ] Add user profile management
+- [ ] Implement patient search functionality
+- [ ] Add study upload and management
+- [ ] Create reports section
+- [x] Add statistics and analytics to dashboard
