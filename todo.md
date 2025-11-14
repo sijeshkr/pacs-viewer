@@ -84,3 +84,7 @@
 - [ ] Add study upload and management
 - [ ] Create reports section
 - [x] Add statistics and analytics to dashboard
+
+## Configuration Changes
+- [x] Remove authentication requirement for testing
+- [x] Make all routes publicly accessible

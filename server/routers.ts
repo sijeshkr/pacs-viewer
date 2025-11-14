@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
 
@@ -21,30 +21,30 @@ export const appRouter = router({
 
   // Dashboard router
   dashboard: router({
-    stats: protectedProcedure.query(async () => {
+    stats: publicProcedure.query(async () => {
       return await db.getDashboardStats();
     }),
   }),
 
   // Patients router
   patients: router({
-    list: protectedProcedure.query(async () => {
+    list: publicProcedure.query(async () => {
       return await db.getAllPatients();
     }),
     
-    search: protectedProcedure
+    search: publicProcedure
       .input(z.object({ searchTerm: z.string() }))
       .query(async ({ input }) => {
         return await db.searchPatients(input.searchTerm);
       }),
     
-    getById: protectedProcedure
+    getById: publicProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         return await db.getPatientById(input.id);
       }),
     
-    create: protectedProcedure
+    create: publicProcedure
       .input(z.object({
         patientId: z.string(),
         name: z.string(),
@@ -55,14 +55,14 @@ export const appRouter = router({
         address: z.string().optional(),
         medicalHistory: z.string().optional(),
       }))
-      .mutation(async ({ input, ctx }) => {
+      .mutation(async ({ input }) => {
         return await db.createPatient({
           ...input,
-          createdBy: ctx.user.id,
+          createdBy: 1, // Default user for testing
         });
       }),
     
-    update: protectedProcedure
+    update: publicProcedure
       .input(z.object({
         id: z.number(),
         data: z.object({
@@ -83,23 +83,23 @@ export const appRouter = router({
 
   // Studies router
   studies: router({
-    list: protectedProcedure.query(async () => {
+    list: publicProcedure.query(async () => {
       return await db.getAllStudies();
     }),
     
-    getById: protectedProcedure
+    getById: publicProcedure
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => {
         return await db.getStudyById(input.id);
       }),
     
-    getByPatientId: protectedProcedure
+    getByPatientId: publicProcedure
       .input(z.object({ patientId: z.number() }))
       .query(async ({ input }) => {
         return await db.getStudiesByPatientId(input.patientId);
       }),
     
-    create: protectedProcedure
+    create: publicProcedure
       .input(z.object({
         studyId: z.string(),
         patientId: z.number(),
@@ -110,14 +110,14 @@ export const appRouter = router({
         referringPhysician: z.string().optional(),
         priority: z.enum(["routine", "urgent", "stat"]).optional(),
       }))
-      .mutation(async ({ input, ctx }) => {
+      .mutation(async ({ input }) => {
         return await db.createStudy({
           ...input,
-          uploadedBy: ctx.user.id,
+          uploadedBy: 1, // Default user for testing
         });
       }),
     
-    updateStatus: protectedProcedure
+    updateStatus: publicProcedure
       .input(z.object({
         id: z.number(),
         status: z.enum(["pending", "in_progress", "completed", "reported"]),
@@ -130,7 +130,7 @@ export const appRouter = router({
 
   // Series router
   series: router({
-    getByStudyId: protectedProcedure
+    getByStudyId: publicProcedure
       .input(z.object({ studyId: z.number() }))
       .query(async ({ input }) => {
         return await db.getSeriesByStudyId(input.studyId);
@@ -139,7 +139,7 @@ export const appRouter = router({
 
   // Instances router
   instances: router({
-    getBySeriesId: protectedProcedure
+    getBySeriesId: publicProcedure
       .input(z.object({ seriesId: z.number() }))
       .query(async ({ input }) => {
         return await db.getInstancesBySeriesId(input.seriesId);
@@ -148,7 +148,7 @@ export const appRouter = router({
 
   // Reports router
   reports: router({
-    getByStudyId: protectedProcedure
+    getByStudyId: publicProcedure
       .input(z.object({ studyId: z.number() }))
       .query(async ({ input }) => {
         return await db.getReportsByStudyId(input.studyId);
