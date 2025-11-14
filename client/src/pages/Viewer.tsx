@@ -19,7 +19,8 @@ import {
   Play,
   Pause,
   Grid3x3,
-  Layers
+  Layers,
+  FileImage
 } from "lucide-react";
 import { toast } from "sonner";
 import { initCornerstone, loadDICOMFile, displayDICOMImage, setActiveTool, cornerstoneTools } from "@/lib/cornerstone";
@@ -44,6 +45,12 @@ interface LoadedImage {
   imageId: string;
 }
 
+const SAMPLE_FILES = [
+  { name: "CT Scan (Small)", path: "/samples/CT_small.dcm" },
+  { name: "MRI Brain (Small)", path: "/samples/MR_small.dcm" },
+  { name: "JPEG2000 Sample", path: "/samples/JPEG2000.dcm" },
+];
+
 export default function Viewer() {
   const [selectedTool, setSelectedTool] = useState<Tool>("windowLevel");
   const [layout, setLayout] = useState<Layout>("1x1");
@@ -67,6 +74,57 @@ export default function Viewer() {
     };
     init();
   }, []);
+
+  const loadSampleFiles = async () => {
+    if (!isInitialized) {
+      toast.error("Viewer not initialized yet");
+      return;
+    }
+
+    try {
+      toast.info("Loading sample DICOM files...");
+      const loadedImagesArray: LoadedImage[] = [];
+
+      for (const sample of SAMPLE_FILES) {
+        try {
+          // Fetch the sample file
+          const response = await fetch(sample.path);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch ${sample.name}`);
+          }
+          
+          const blob = await response.blob();
+          const file = new File([blob], sample.name, { type: 'application/dicom' });
+          
+          const imageId = await loadDICOMFile(file);
+          loadedImagesArray.push({ file, imageId });
+        } catch (error) {
+          console.error(`Failed to load ${sample.name}:`, error);
+        }
+      }
+
+      if (loadedImagesArray.length > 0) {
+        setLoadedImages(loadedImagesArray);
+        toast.success(`Loaded ${loadedImagesArray.length} sample DICOM file(s)`);
+        
+        // Display first image in first viewport
+        setTimeout(() => {
+          if (viewportRefs.current[0] && loadedImagesArray[0]) {
+            displayDICOMImage(viewportRefs.current[0], loadedImagesArray[0].imageId)
+              .catch(err => {
+                console.error("Failed to display image:", err);
+                toast.error("Failed to display image");
+              });
+          }
+        }, 100);
+      } else {
+        toast.error("No sample files could be loaded");
+      }
+    } catch (error) {
+      console.error("Error loading sample files:", error);
+      toast.error("Error loading sample files");
+    }
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -210,6 +268,14 @@ export default function Viewer() {
           >
             <Upload className="w-4 h-4 mr-2" />
             Load DICOM
+          </Button>
+          <Button
+            onClick={loadSampleFiles}
+            variant="outline"
+            size="sm"
+          >
+            <FileImage className="w-4 h-4 mr-2" />
+            Load Samples
           </Button>
         </div>
         

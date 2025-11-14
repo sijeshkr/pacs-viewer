@@ -54,3 +54,9 @@
 - [ ] Test with sample DICOM files
 - [ ] Verify all tools work correctly
 - [ ] Cross-browser testing
+
+## Sample Data
+- [x] Download sample DICOM files
+- [x] Bundle sample files with application
+- [x] Add "Load Sample" button to UI
+- [x] Create sample data loader functionality
