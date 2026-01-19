@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import GuestUpload from "@/pages/GuestUpload";
+import AddPatient from "@/pages/AddPatient";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -17,7 +18,9 @@ function Router() {
       <Route path={"/"} component={Dashboard} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/patients" component={Patients} />
+      <Route path="/patients/add" component={AddPatient} />
       <Route path="/studies" component={Studies} />
+      <Route path="/viewer" component={Viewer} />
       <Route path="/upload/:token" component={GuestUpload} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
@@ -36,7 +39,7 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider
         defaultTheme="dark"
-        // switchable
+        switchable
       >
         <TooltipProvider>
           <Toaster />

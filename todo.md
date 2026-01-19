@@ -150,3 +150,22 @@
 - [ ] Report creation and approval workflow
 - [ ] Automatic report sending to referring physician
 - [ ] Study status tracking (ordered → acquired → read → reported)
+
+## Bug Fixes - URGENT
+- [x] Fix 404 error for DICOM viewer route
+- [x] Fix 404 error for add patient page
+- [x] Add missing routes to App.tsx
+
+## Remaining Implementation
+- [ ] Integrate Cornerstone.js with EnhancedDicomViewer component
+- [x] Create AddPatient page with form
+- [ ] Create StudyDetail page with integrated viewer
+- [ ] Create PatientDetail page
+- [ ] Implement DICOM file upload with S3 storage
+- [ ] Extract DICOM metadata and create database records
+- [ ] Build role-specific dashboards (doctor, patient, admin)
+
+## Theme Switcher
+- [x] Enable switchable theme in App.tsx
+- [x] Add theme toggle button to dashboard header
+- [ ] Update light theme colors in index.css
