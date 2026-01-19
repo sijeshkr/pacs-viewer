@@ -156,12 +156,12 @@
 - [x] Fix 404 error for add patient page
 - [x] Add missing routes to App.tsx
 
-## Remaining Implementation - BATCH 2 IN PROGRESS
-- [ ] Integrate Cornerstone.js with EnhancedDicomViewer component
+## Remaining Implementation - BATCH 3 IN PROGRESS
+- [x] Integrate Cornerstone.js with EnhancedDicomViewer component
 - [x] Create AddPatient page with form
 - [x] Create StudyDetail page with integrated viewer
-- [ ] Create PatientDetail page
-- [ ] Implement DICOM file upload with S3 storage
+- [x] Create PatientDetail page
+- [x] Implement DICOM file upload with S3 storage
 - [ ] Extract DICOM metadata and create database records
 - [ ] Build role-specific dashboards (doctor, patient, admin)
 

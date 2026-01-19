@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { initCornerstone, displayDICOMImage } from "@/lib/cornerstone";
+import { toast } from "sonner";
 import {
   Play,
   Pause,
@@ -26,15 +28,46 @@ export function EnhancedDicomViewer({ imageIds, onClose }: EnhancedDicomViewerPr
   const [loop, setLoop] = useState(true);
   const [splitScreen, setSplitScreen] = useState(false);
   const [totalFrames, setTotalFrames] = useState(imageIds.length);
+  const [isInitialized, setIsInitialized] = useState(false);
   
   const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize Cornerstone viewport
   useEffect(() => {
-    // TODO: Initialize Cornerstone.js viewport
-    // This will be implemented with proper Cornerstone.js setup
-    setTotalFrames(imageIds.length);
-  }, [imageIds]);
+    const init = async () => {
+      try {
+        await initCornerstone();
+        setIsInitialized(true);
+        setTotalFrames(imageIds.length);
+      } catch (error) {
+        console.error("Failed to initialize Cornerstone:", error);
+        toast.error("Failed to initialize DICOM viewer");
+      }
+    };
+    init();
+  }, []);
+
+  // Load and display DICOM images
+  useEffect(() => {
+    if (!isInitialized || imageIds.length === 0) return;
+
+    const loadImage = async () => {
+      try {
+        const imageId = imageIds[currentFrame];
+        if (viewportRef1.current) {
+          await displayDICOMImage(viewportRef1.current, imageId);
+        }
+        if (splitScreen && viewportRef2.current && imageIds[currentFrame + 1]) {
+          await displayDICOMImage(viewportRef2.current, imageIds[currentFrame + 1]);
+        }
+      } catch (error) {
+        console.error("Failed to load DICOM image:", error);
+        toast.error("Failed to load DICOM image");
+      }
+    };
+
+    loadImage();
+  }, [isInitialized, imageIds, currentFrame, splitScreen]);
 
   // Cine playback logic
   useEffect(() => {
@@ -129,9 +162,11 @@ export function EnhancedDicomViewer({ imageIds, onClose }: EnhancedDicomViewerPr
             ref={viewportRef1}
             className="w-full h-full bg-black flex items-center justify-center"
           >
-            <div className="text-gray-400">
-              Viewport 1 - Frame {currentFrame + 1} / {totalFrames}
-            </div>
+            {!isInitialized && (
+              <div className="text-gray-400">
+                Initializing DICOM viewer...
+              </div>
+            )}
           </div>
         </div>
 
@@ -142,9 +177,11 @@ export function EnhancedDicomViewer({ imageIds, onClose }: EnhancedDicomViewerPr
               ref={viewportRef2}
               className="w-full h-full bg-black flex items-center justify-center"
             >
-              <div className="text-gray-400">
-                Viewport 2 - Frame {currentFrame + 1} / {totalFrames}
-              </div>
+              {!isInitialized && (
+                <div className="text-gray-400">
+                  Initializing viewport 2...
+                </div>
+              )}
             </div>
           </div>
         )}

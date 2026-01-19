@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import GuestUpload from "@/pages/GuestUpload";
 import AddPatient from "@/pages/AddPatient";
 import StudyDetail from "@/pages/StudyDetail";
+import PatientDetail from "@/pages/PatientDetail";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
@@ -19,6 +20,7 @@ function Router() {
       <Route path={"/"} component={Dashboard} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/patients" component={Patients} />
+      <Route path="/patients/:id" component={PatientDetail} />
       <Route path="/patients/add" component={AddPatient} />
       <Route path="/studies" component={Studies} />
       <Route path="/studies/:id" component={StudyDetail} />

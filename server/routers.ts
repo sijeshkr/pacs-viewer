@@ -127,6 +127,21 @@ export const appRouter = router({
         await db.updateStudy(input.id, { status: input.status });
         return { success: true };
       }),
+
+    uploadDicom: protectedProcedure
+      .input(z.object({
+        patientId: z.number(),
+        files: z.array(z.string()),
+      }))
+      .mutation(async ({ input }) => {
+        // TODO: Implement actual DICOM upload logic
+        // 1. Parse DICOM files and extract metadata
+        // 2. Upload files to S3 using storagePut
+        // 3. Create study/series/instance records
+        
+        // For now, return a placeholder study ID
+        return { studyId: 1, success: true };
+      }),
   }),
 
   // Series router
