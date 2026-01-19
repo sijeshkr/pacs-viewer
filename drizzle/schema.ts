@@ -16,7 +16,7 @@ export const users = mysqlTable("users", {
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["admin", "doctor", "patient"]).default("patient").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
@@ -121,3 +121,54 @@ export const reports = mysqlTable("reports", {
 
 export type Report = typeof reports.$inferSelect;
 export type InsertReport = typeof reports.$inferInsert;
+
+/**
+ * Doctor-Patient relationship table
+ * Links patients to their primary care doctor and other assigned doctors
+ */
+export const doctorPatients = mysqlTable("doctor_patients", {
+  id: int("id").autoincrement().primaryKey(),
+  doctorId: int("doctorId").notNull().references(() => users.id),
+  patientId: int("patientId").notNull().references(() => patients.id),
+  isPrimary: int("isPrimary").default(0).notNull(), // 1 for primary doctor, 0 for others
+  assignedAt: timestamp("assignedAt").defaultNow().notNull(),
+});
+
+export type DoctorPatient = typeof doctorPatients.$inferSelect;
+export type InsertDoctorPatient = typeof doctorPatients.$inferInsert;
+
+/**
+ * Study access/sharing table
+ * Allows studies to be shared with multiple doctors
+ */
+export const studyAccess = mysqlTable("study_access", {
+  id: int("id").autoincrement().primaryKey(),
+  studyId: int("studyId").notNull().references(() => studies.id),
+  doctorId: int("doctorId").notNull().references(() => users.id),
+  grantedBy: int("grantedBy").notNull().references(() => users.id), // Who granted access
+  accessLevel: mysqlEnum("accessLevel", ["view", "edit", "report"]).default("view").notNull(),
+  grantedAt: timestamp("grantedAt").defaultNow().notNull(),
+});
+
+export type StudyAccess = typeof studyAccess.$inferSelect;
+export type InsertStudyAccess = typeof studyAccess.$inferInsert;
+
+/**
+ * Upload tokens for guest uploads
+ * Allows doctors to generate secure links for patients to upload DICOM files
+ */
+export const uploadTokens = mysqlTable("upload_tokens", {
+  id: int("id").autoincrement().primaryKey(),
+  token: varchar("token", { length: 128 }).notNull().unique(),
+  doctorId: int("doctorId").notNull().references(() => users.id),
+  patientId: int("patientId").references(() => patients.id), // Optional: can be null if patient doesn't exist yet
+  patientName: varchar("patientName", { length: 255 }), // For creating new patient
+  patientEmail: varchar("patientEmail", { length: 320 }),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  isActive: int("isActive").default(1).notNull(), // 1 = active, 0 = used/expired
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type UploadToken = typeof uploadTokens.$inferSelect;
+export type InsertUploadToken = typeof uploadTokens.$inferInsert;

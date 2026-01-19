@@ -1,6 +1,6 @@
 import { eq, desc, and, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, patients, studies, series, instances, reports, InsertPatient, InsertStudy } from "../drizzle/schema";
+import { InsertUser, users, patients, studies, series, instances, reports, InsertPatient, InsertStudy, doctorPatients, InsertDoctorPatient, studyAccess, InsertStudyAccess, uploadTokens, InsertUploadToken } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -230,4 +230,141 @@ export async function getDashboardStats() {
     pendingStudies: Number(pendingCount.count),
     completedStudies: Number(completedCount.count),
   };
+}
+
+// Doctor-Patient relationship queries
+export async function assignPatientToDoctor(doctorId: number, patientId: number, isPrimary: boolean = false) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.insert(doctorPatients).values({
+    doctorId,
+    patientId,
+    isPrimary: isPrimary ? 1 : 0,
+  });
+}
+
+export async function getDoctorPatients(doctorId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db
+    .select({
+      patient: patients,
+      relationship: doctorPatients,
+    })
+    .from(doctorPatients)
+    .leftJoin(patients, eq(doctorPatients.patientId, patients.id))
+    .where(eq(doctorPatients.doctorId, doctorId))
+    .orderBy(desc(doctorPatients.isPrimary), desc(patients.createdAt));
+  
+  return result;
+}
+
+export async function getPatientDoctors(patientId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db
+    .select({
+      doctor: users,
+      relationship: doctorPatients,
+    })
+    .from(doctorPatients)
+    .leftJoin(users, eq(doctorPatients.doctorId, users.id))
+    .where(eq(doctorPatients.patientId, patientId))
+    .orderBy(desc(doctorPatients.isPrimary));
+  
+  return result;
+}
+
+// Study access/sharing queries
+export async function grantStudyAccess(studyId: number, doctorId: number, grantedBy: number, accessLevel: "view" | "edit" | "report" = "view") {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.insert(studyAccess).values({
+    studyId,
+    doctorId,
+    grantedBy,
+    accessLevel,
+  });
+}
+
+export async function getStudyAccessList(studyId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db
+    .select({
+      doctor: users,
+      access: studyAccess,
+    })
+    .from(studyAccess)
+    .leftJoin(users, eq(studyAccess.doctorId, users.id))
+    .where(eq(studyAccess.studyId, studyId));
+  
+  return result;
+}
+
+export async function getDoctorAccessibleStudies(doctorId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  const result = await db
+    .select({
+      study: studies,
+      patient: patients,
+      access: studyAccess,
+    })
+    .from(studyAccess)
+    .leftJoin(studies, eq(studyAccess.studyId, studies.id))
+    .leftJoin(patients, eq(studies.patientId, patients.id))
+    .where(eq(studyAccess.doctorId, doctorId))
+    .orderBy(desc(studies.studyDate));
+  
+  return result;
+}
+
+export async function revokeStudyAccess(studyId: number, doctorId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(studyAccess).where(
+    sql`${studyAccess.studyId} = ${studyId} AND ${studyAccess.doctorId} = ${doctorId}`
+  );
+}
+
+// Upload token queries
+export async function createUploadToken(token: InsertUploadToken) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(uploadTokens).values(token);
+  return result;
+}
+
+export async function getUploadTokenByToken(token: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  
+  const result = await db.select().from(uploadTokens).where(eq(uploadTokens.token, token)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function markTokenAsUsed(token: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(uploadTokens).set({
+    usedAt: new Date(),
+    isActive: 0,
+  }).where(eq(uploadTokens.token, token));
+}
+
+export async function getDoctorUploadTokens(doctorId: number) {
+  const db = await getDb();
+  if (!db) return [];
+  
+  return await db.select().from(uploadTokens).where(eq(uploadTokens.doctorId, doctorId)).orderBy(desc(uploadTokens.createdAt));
 }

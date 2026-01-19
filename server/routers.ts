@@ -4,6 +4,7 @@ import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import * as db from "./db";
+import { doctorPatientRouter, studySharingRouter, uploadTokenRouter } from "./routers/doctorPatient";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -146,6 +147,15 @@ export const appRouter = router({
       }),
   }),
 
+  // Doctor-Patient relationships
+  doctorPatient: doctorPatientRouter,
+  
+  // Study sharing
+  studySharing: studySharingRouter,
+  
+  // Upload tokens
+  uploadToken: uploadTokenRouter,
+  
   // Reports router
   reports: router({
     getByStudyId: protectedProcedure
