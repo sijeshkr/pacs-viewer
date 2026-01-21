@@ -169,3 +169,82 @@
 - [x] Enable switchable theme in App.tsx
 - [x] Add theme toggle button to dashboard header
 - [ ] Update light theme colors in index.css
+
+## Batch 4 - S3 Upload & Metadata Extraction - IN PROGRESS
+- [ ] Install dicom-parser npm package
+- [ ] Create DICOM metadata extraction utility
+- [ ] Implement S3 file upload in DicomUpload component
+- [ ] Parse DICOM files and extract patient/study/series metadata
+- [ ] Create study/series/instance records in database
+- [ ] Handle DICOM file validation and error cases
+- [ ] Add upload progress tracking with actual S3 upload
+- [ ] Test with real DICOM files
+
+## Batch 5 - Role-Specific Dashboards
+- [ ] Create DoctorDashboard component
+- [ ] Create PatientDashboard component  
+- [ ] Create AdminDashboard component
+- [ ] Implement role-based routing logic
+- [ ] Add doctor's patient list view
+- [ ] Add patient's own studies view
+- [ ] Add admin user management interface
+- [ ] Update seed data to assign roles
+
+## Batch 6 - EHR Integration
+- [ ] Create HL7 message parser
+- [ ] Implement FHIR API endpoints
+- [ ] Add DICOMweb WADO-RS endpoint
+- [ ] Add DICOMweb QIDO-RS endpoint
+- [ ] Add DICOMweb STOW-RS endpoint
+- [ ] Create order management interface
+- [ ] Add report sending functionality
+- [ ] Create integration settings page
+
+
+## Clinic Multi-Tenancy System - PRIORITY
+- [ ] Update database schema with clinic/organization table
+- [ ] Add clinic_id to users, patients, studies tables
+- [ ] Expand role system: clinic_admin, doctor, radiologist, technician, staff, patient
+- [ ] Implement data isolation by clinic (each clinic sees only their data)
+- [ ] Create clinic registration/setup workflow
+- [ ] Add user invitation system for clinic staff
+- [ ] Create clinic settings page (branding, preferences)
+- [ ] Add clinic admin dashboard for user management
+- [ ] Implement role-based permissions matrix
+- [ ] Add staff role for non-medical personnel (schedulers, receptionists)
+
+
+## PRIORITY - Complete S3 & Metadata Extraction
+- [ ] Finish implementing actual S3 file upload in DicomUpload component
+- [ ] Connect dicom-parser to extract metadata from uploaded files
+- [ ] Auto-create patient/study/series/instance records from DICOM metadata
+- [ ] Test end-to-end upload flow with real DICOM files
+
+## PRIORITY - API Management & Integration
+- [ ] Create API documentation page (Swagger/OpenAPI)
+- [ ] Implement HL7 v2 message receiver endpoint (for orders from EHR)
+- [ ] Implement FHIR R4 REST API endpoints
+- [ ] Add API key management interface for external systems
+- [ ] Create webhook configuration for outbound notifications
+- [ ] Add API usage monitoring and rate limiting
+- [ ] Create integration testing interface
+
+## Admin Features
+- [ ] API key management dashboard
+- [ ] Integration endpoints configuration
+- [ ] System health monitoring
+- [ ] User activity logs/audit trail
+- [ ] Database backup and restore interface
+- [ ] System settings and configuration
+
+## Additional Features to Consider
+- [ ] AI-powered image analysis integration
+- [ ] Automated report generation templates
+- [ ] Mobile app support (responsive design)
+- [ ] DICOM CD/DVD import functionality
+- [ ] Batch DICOM upload (multiple files at once)
+- [ ] Study comparison tools (side-by-side with measurements)
+- [ ] 3D volume rendering (for CT/MRI)
+- [ ] DICOM anonymization tools (remove patient identifiers)
+- [ ] Study archiving and retrieval system
+- [ ] Integration with billing systems
