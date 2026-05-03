@@ -25,12 +25,10 @@ export default function StudyDetail() {
   const [imageIds, setImageIds] = useState<string[]>([]);
 
   useEffect(() => {
-    // In a real implementation, fetch DICOM file URLs from S3 and convert to Cornerstone imageIds
-    // For now, use sample files with wadouri prefix
+    // Use sample DICOM files from the public directory
+    // These are served at the root URL path
     setImageIds([
       "wadouri:/samples/CT_small.dcm",
-      "wadouri:/samples/MR_small.dcm",
-      "wadouri:/samples/JPEG2000.dcm",
     ]);
   }, [study]);
 
@@ -152,7 +150,7 @@ export default function StudyDetail() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <EnhancedDicomViewer imageIds={imageIds} />
+                <EnhancedDicomViewer imageIds={imageIds} inline />
               </CardContent>
             </Card>
           </TabsContent>

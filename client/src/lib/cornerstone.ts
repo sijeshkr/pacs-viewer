@@ -4,79 +4,75 @@ import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
 import dicomParser from 'dicom-parser';
 
 let isInitialized = false;
+let initPromise: Promise<void> | null = null;
 
 export async function initCornerstone() {
-  if (isInitialized) {
-    return;
-  }
+  if (isInitialized) return;
 
-  try {
-    // Configure WADO Image Loader
-    cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
-    cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
+  // Prevent multiple concurrent initializations
+  if (initPromise) return initPromise;
 
-    // Configure web worker for DICOM parsing
-    const config = {
-      maxWebWorkers: navigator.hardwareConcurrency || 4,
-      startWebWorkersOnDemand: true,
-      taskConfiguration: {
-        decodeTask: {
-          initializeCodecsOnStartup: false,
-          strict: false,
+  initPromise = (async () => {
+    try {
+      // Step 1: Initialize Cornerstone CORE first — must happen before WADO loader
+      await cornerstone.init();
+
+      // Step 2: Wire up WADO image loader AFTER core is ready
+      cornerstoneWADOImageLoader.external.cornerstone = cornerstone;
+      cornerstoneWADOImageLoader.external.dicomParser = dicomParser;
+
+      // Step 3: Configure web worker manager
+      const config = {
+        maxWebWorkers: Math.min(navigator.hardwareConcurrency || 2, 4),
+        startWebWorkersOnDemand: true,
+        taskConfiguration: {
+          decodeTask: {
+            initializeCodecsOnStartup: false,
+            strict: false,
+          },
         },
-      },
-    };
+      };
+      cornerstoneWADOImageLoader.webWorkerManager.initialize(config);
 
-    cornerstoneWADOImageLoader.webWorkerManager.initialize(config);
+      // Step 4: Initialize tools
+      cornerstoneTools.init();
 
-    // Initialize Cornerstone
-    await cornerstone.init();
+      // Step 5: Register all tools
+      const toolsToAdd = [
+        cornerstoneTools.PanTool,
+        cornerstoneTools.ZoomTool,
+        cornerstoneTools.WindowLevelTool,
+        cornerstoneTools.LengthTool,
+        cornerstoneTools.AngleTool,
+        cornerstoneTools.EllipticalROITool,
+        cornerstoneTools.RectangleROITool,
+        cornerstoneTools.ArrowAnnotateTool,
+        cornerstoneTools.StackScrollTool,
+      ];
 
-    // Initialize Cornerstone Tools
-    cornerstoneTools.init();
+      toolsToAdd.forEach((tool) => {
+        try {
+          cornerstoneTools.addTool(tool);
+        } catch {
+          // Tool may already be added — safe to ignore
+        }
+      });
 
-    // Add tools
-    cornerstoneTools.addTool(cornerstoneTools.PanTool);
-    cornerstoneTools.addTool(cornerstoneTools.ZoomTool);
-    // Stack scroll will be handled via mouse wheel events
-    cornerstoneTools.addTool(cornerstoneTools.WindowLevelTool);
-    cornerstoneTools.addTool(cornerstoneTools.LengthTool);
-    cornerstoneTools.addTool(cornerstoneTools.AngleTool);
-    cornerstoneTools.addTool(cornerstoneTools.EllipticalROITool);
-    cornerstoneTools.addTool(cornerstoneTools.RectangleROITool);
-    cornerstoneTools.addTool(cornerstoneTools.ArrowAnnotateTool);
+      isInitialized = true;
+      console.log('[Cornerstone] Initialized successfully');
+    } catch (error) {
+      initPromise = null; // Allow retry on failure
+      console.error('[Cornerstone] Initialization failed:', error);
+      throw error;
+    }
+  })();
 
-    isInitialized = true;
-    console.log('Cornerstone initialized successfully');
-  } catch (error) {
-    console.error('Failed to initialize Cornerstone:', error);
-    throw error;
-  }
+  return initPromise;
 }
 
-export function loadDICOMFile(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = (event) => {
-      const arrayBuffer = event.target?.result as ArrayBuffer;
-      if (!arrayBuffer) {
-        reject(new Error('Failed to read file'));
-        return;
-      }
-
-      // Create a blob URL for the DICOM file
-      const blob = new Blob([arrayBuffer], { type: 'application/dicom' });
-      const imageId = cornerstoneWADOImageLoader.wadouri.fileManager.add(file);
-      resolve(imageId);
-    };
-
-    reader.onerror = () => {
-      reject(new Error('Failed to read file'));
-    };
-
-    reader.readAsArrayBuffer(file);
-  });
+export function loadDICOMFile(file: File): string {
+  // Register file with WADO URI manager and return imageId
+  return cornerstoneWADOImageLoader.wadouri.fileManager.add(file);
 }
 
 export async function displayDICOMImage(
@@ -84,10 +80,14 @@ export async function displayDICOMImage(
   imageId: string,
   toolGroupId: string = 'default'
 ) {
+  if (!element) throw new Error('Viewport element is null');
+  if (!imageId) throw new Error('imageId is required');
+
   try {
-    // Enable the element for Cornerstone
-    const renderingEngineId = 'myRenderingEngine';
-    const viewportId = `viewport-${element.id}`;
+    const renderingEngineId = 'pacsRenderingEngine';
+    // Use element's dataset id or generate a stable one
+    const viewportId = element.dataset.viewportId || `vp-${Math.random().toString(36).slice(2, 8)}`;
+    element.dataset.viewportId = viewportId;
 
     // Get or create rendering engine
     let renderingEngine = cornerstone.getRenderingEngine(renderingEngineId);
@@ -95,22 +95,22 @@ export async function displayDICOMImage(
       renderingEngine = new cornerstone.RenderingEngine(renderingEngineId);
     }
 
-    // Create viewport
-    const viewportInput = {
-      viewportId,
-      type: cornerstone.Enums.ViewportType.STACK,
-      element,
-      defaultOptions: {
-        background: [0, 0, 0] as [number, number, number],
-      },
-    };
+    // Enable element if not already enabled
+    try {
+      renderingEngine.enableElement({
+        viewportId,
+        type: cornerstone.Enums.ViewportType.STACK,
+        element,
+        defaultOptions: {
+          background: [0, 0, 0] as [number, number, number],
+        },
+      });
+    } catch {
+      // Element may already be enabled — continue
+    }
 
-    renderingEngine.enableElement(viewportInput);
-
-    // Get the viewport
+    // Get viewport and load image
     const viewport = renderingEngine.getViewport(viewportId) as cornerstone.Types.IStackViewport;
-
-    // Load and display the image
     await viewport.setStack([imageId], 0);
     viewport.render();
 
@@ -118,36 +118,47 @@ export async function displayDICOMImage(
     let toolGroup = cornerstoneTools.ToolGroupManager.getToolGroup(toolGroupId);
     if (!toolGroup) {
       toolGroup = cornerstoneTools.ToolGroupManager.createToolGroup(toolGroupId);
-      
+
       if (toolGroup) {
-        // Add tools to the tool group
         toolGroup.addTool(cornerstoneTools.WindowLevelTool.toolName);
         toolGroup.addTool(cornerstoneTools.PanTool.toolName);
         toolGroup.addTool(cornerstoneTools.ZoomTool.toolName);
-        // Stack scroll handled separately
         toolGroup.addTool(cornerstoneTools.LengthTool.toolName);
         toolGroup.addTool(cornerstoneTools.AngleTool.toolName);
         toolGroup.addTool(cornerstoneTools.EllipticalROITool.toolName);
         toolGroup.addTool(cornerstoneTools.RectangleROITool.toolName);
         toolGroup.addTool(cornerstoneTools.ArrowAnnotateTool.toolName);
+        toolGroup.addTool(cornerstoneTools.StackScrollTool.toolName);
 
-        // Set initial tool as active
+        // Default active tool: Window/Level on left mouse button
         toolGroup.setToolActive(cornerstoneTools.WindowLevelTool.toolName, {
           bindings: [{ mouseButton: cornerstoneTools.Enums.MouseBindings.Primary }],
         });
 
-        // Stack scroll handled via mouse wheel events
+        // Pan on middle mouse button
+        toolGroup.setToolActive(cornerstoneTools.PanTool.toolName, {
+          bindings: [{ mouseButton: cornerstoneTools.Enums.MouseBindings.Auxiliary }],
+        });
+
+        // Zoom on right mouse button
+        toolGroup.setToolActive(cornerstoneTools.ZoomTool.toolName, {
+          bindings: [{ mouseButton: cornerstoneTools.Enums.MouseBindings.Secondary }],
+        });
+
+        // Mouse wheel scroll through stack
+        toolGroup.setToolActive(cornerstoneTools.StackScrollTool.toolName, {
+          bindings: [{ mouseButton: cornerstoneTools.Enums.MouseBindings.Wheel }],
+        });
       }
     }
 
-    // Add viewport to tool group
     if (toolGroup) {
       toolGroup.addViewport(viewportId, renderingEngineId);
     }
 
     return viewport;
   } catch (error) {
-    console.error('Failed to display DICOM image:', error);
+    console.error('[Cornerstone] Failed to display image:', error);
     throw error;
   }
 }
@@ -155,12 +166,11 @@ export async function displayDICOMImage(
 export function setActiveTool(toolName: string, toolGroupId: string = 'default') {
   const toolGroup = cornerstoneTools.ToolGroupManager.getToolGroup(toolGroupId);
   if (!toolGroup) {
-    console.error('Tool group not found');
+    console.warn('[Cornerstone] Tool group not found:', toolGroupId);
     return;
   }
 
-  // Deactivate all tools first
-  const tools = [
+  const allTools = [
     cornerstoneTools.WindowLevelTool.toolName,
     cornerstoneTools.PanTool.toolName,
     cornerstoneTools.ZoomTool.toolName,
@@ -171,11 +181,16 @@ export function setActiveTool(toolName: string, toolGroupId: string = 'default')
     cornerstoneTools.ArrowAnnotateTool.toolName,
   ];
 
-  tools.forEach((tool) => {
-    toolGroup.setToolPassive(tool);
+  // Deactivate all tools first
+  allTools.forEach((tool) => {
+    try {
+      toolGroup.setToolPassive(tool);
+    } catch {
+      // Ignore if tool isn't in group
+    }
   });
 
-  // Activate the selected tool
+  // Activate the requested tool
   toolGroup.setToolActive(toolName, {
     bindings: [{ mouseButton: cornerstoneTools.Enums.MouseBindings.Primary }],
   });

@@ -248,3 +248,7 @@
 - [ ] DICOM anonymization tools (remove patient identifiers)
 - [ ] Study archiving and retrieval system
 - [ ] Integration with billing systems
+
+## Bug Fix - Cornerstone Error
+- [x] Fix "Event type was not defined" error on /studies/:id page
+- [x] Ensure Cornerstone.js is properly initialized before rendering

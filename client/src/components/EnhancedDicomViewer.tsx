@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { initCornerstone, displayDICOMImage } from "@/lib/cornerstone";
@@ -10,79 +10,97 @@ import {
   SkipForward,
   Repeat,
   Grid2X2,
-  Maximize2,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
 
 interface EnhancedDicomViewerProps {
   imageIds: string[];
   onClose?: () => void;
+  /** When true, renders inline (no fixed overlay). Default: false (full-screen overlay) */
+  inline?: boolean;
 }
 
-export function EnhancedDicomViewer({ imageIds, onClose }: EnhancedDicomViewerProps) {
+export function EnhancedDicomViewer({ imageIds, onClose, inline = false }: EnhancedDicomViewerProps) {
   const viewportRef1 = useRef<HTMLDivElement>(null);
   const viewportRef2 = useRef<HTMLDivElement>(null);
-  
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [loop, setLoop] = useState(true);
   const [splitScreen, setSplitScreen] = useState(false);
-  const [totalFrames, setTotalFrames] = useState(imageIds.length);
+  const [totalFrames, setTotalFrames] = useState(Math.max(imageIds.length, 1));
   const [isInitialized, setIsInitialized] = useState(false);
-  
-  const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Initialize Cornerstone viewport
+  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Initialize Cornerstone once
   useEffect(() => {
+    let cancelled = false;
     const init = async () => {
       try {
         await initCornerstone();
-        setIsInitialized(true);
-        setTotalFrames(imageIds.length);
-      } catch (error) {
-        console.error("Failed to initialize Cornerstone:", error);
-        toast.error("Failed to initialize DICOM viewer");
+        if (!cancelled) {
+          setIsInitialized(true);
+          setTotalFrames(Math.max(imageIds.length, 1));
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : "Failed to initialize DICOM viewer";
+          setError(msg);
+          setIsLoading(false);
+          console.error("[EnhancedDicomViewer] Init error:", err);
+        }
       }
     };
     init();
-  }, []);
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load and display DICOM images
-  useEffect(() => {
+  // Load image whenever frame changes or initialization completes
+  const loadCurrentImage = useCallback(async () => {
     if (!isInitialized || imageIds.length === 0) return;
-
-    const loadImage = async () => {
-      try {
-        const imageId = imageIds[currentFrame];
-        if (viewportRef1.current) {
-          await displayDICOMImage(viewportRef1.current, imageId);
-        }
-        if (splitScreen && viewportRef2.current && imageIds[currentFrame + 1]) {
-          await displayDICOMImage(viewportRef2.current, imageIds[currentFrame + 1]);
-        }
-      } catch (error) {
-        console.error("Failed to load DICOM image:", error);
+    setIsLoading(true);
+    setError(null);
+    try {
+      const imageId = imageIds[currentFrame];
+      if (viewportRef1.current) {
+        await displayDICOMImage(viewportRef1.current, imageId, "group-1");
+      }
+      if (splitScreen && viewportRef2.current) {
+        const secondId = imageIds[Math.min(currentFrame + 1, imageIds.length - 1)];
+        await displayDICOMImage(viewportRef2.current, secondId, "group-2");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to load DICOM image";
+      // Suppress the "Event type was not defined" noise — it's a non-fatal WADO loader event
+      if (!msg.includes("Event type")) {
+        setError(msg);
         toast.error("Failed to load DICOM image");
       }
-    };
-
-    loadImage();
+      console.warn("[EnhancedDicomViewer] Load error (non-fatal):", err);
+    } finally {
+      setIsLoading(false);
+    }
   }, [isInitialized, imageIds, currentFrame, splitScreen]);
 
-  // Cine playback logic
+  useEffect(() => {
+    loadCurrentImage();
+  }, [loadCurrentImage]);
+
+  // Cine playback
   useEffect(() => {
     if (isPlaying) {
-      const frameTime = 1000 / (30 * playbackSpeed); // 30 FPS base
-      
+      const frameTime = 1000 / (30 * playbackSpeed);
       playbackIntervalRef.current = setInterval(() => {
         setCurrentFrame((prev) => {
           if (prev >= totalFrames - 1) {
-            if (loop) {
-              return 0;
-            } else {
-              setIsPlaying(false);
-              return prev;
-            }
+            if (loop) return 0;
+            setIsPlaying(false);
+            return prev;
           }
           return prev + 1;
         });
@@ -93,60 +111,38 @@ export function EnhancedDicomViewer({ imageIds, onClose }: EnhancedDicomViewerPr
         playbackIntervalRef.current = null;
       }
     }
-
     return () => {
-      if (playbackIntervalRef.current) {
-        clearInterval(playbackIntervalRef.current);
-      }
+      if (playbackIntervalRef.current) clearInterval(playbackIntervalRef.current);
     };
   }, [isPlaying, playbackSpeed, loop, totalFrames]);
 
-  const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
-  };
+  const wrapperClass = inline
+    ? "flex flex-col bg-black rounded-lg overflow-hidden"
+    : "fixed inset-0 bg-black z-50 flex flex-col";
 
-  const handlePreviousFrame = () => {
-    setCurrentFrame((prev) => Math.max(0, prev - 1));
-  };
-
-  const handleNextFrame = () => {
-    setCurrentFrame((prev) => Math.min(totalFrames - 1, prev + 1));
-  };
-
-  const handleFrameChange = (value: number[]) => {
-    setCurrentFrame(value[0]);
-    setIsPlaying(false);
-  };
-
-  const handleSpeedChange = (speed: number) => {
-    setPlaybackSpeed(speed);
-  };
-
-  const toggleSplitScreen = () => {
-    setSplitScreen(!splitScreen);
-  };
+  const viewportHeight = inline ? "h-96" : "flex-1";
 
   return (
-    <div className="fixed inset-0 bg-black z-50 flex flex-col">
+    <div className={wrapperClass}>
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-gray-900 border-b border-gray-700">
-        <h2 className="text-white text-lg font-semibold">DICOM Viewer</h2>
+      <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-700 shrink-0">
+        <h2 className="text-white text-sm font-semibold">DICOM Viewer</h2>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={toggleSplitScreen}
-            className="text-white border-gray-600"
+            onClick={() => setSplitScreen(!splitScreen)}
+            className="text-white border-gray-600 h-7 text-xs"
           >
-            <Grid2X2 className="w-4 h-4 mr-2" />
-            {splitScreen ? "Single View" : "Split Screen"}
+            <Grid2X2 className="w-3 h-3 mr-1" />
+            {splitScreen ? "Single" : "Split"}
           </Button>
           {onClose && (
             <Button
               variant="outline"
               size="sm"
               onClick={onClose}
-              className="text-white border-gray-600"
+              className="text-white border-gray-600 h-7 text-xs"
             >
               Close
             </Button>
@@ -155,117 +151,116 @@ export function EnhancedDicomViewer({ imageIds, onClose }: EnhancedDicomViewerPr
       </div>
 
       {/* Viewport Area */}
-      <div className="flex-1 flex">
-        {/* Main Viewport */}
-        <div className={splitScreen ? "w-1/2 border-r border-gray-700" : "w-full"}>
+      <div className={`flex ${viewportHeight} min-h-0`}>
+        {/* Primary Viewport */}
+        <div className={`relative ${splitScreen ? "w-1/2 border-r border-gray-700" : "w-full"} bg-black`}>
           <div
             ref={viewportRef1}
-            className="w-full h-full bg-black flex items-center justify-center"
-          >
-            {!isInitialized && (
-              <div className="text-gray-400">
-                Initializing DICOM viewer...
-              </div>
-            )}
-          </div>
+            className="w-full h-full"
+            style={{ minHeight: inline ? "384px" : undefined }}
+          />
+          {/* Loading overlay */}
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70">
+              <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
+            </div>
+          )}
+          {/* Error overlay */}
+          {error && !isLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 text-center px-4">
+              <AlertCircle className="w-10 h-10 text-red-400 mb-2" />
+              <p className="text-red-300 text-sm">{error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadCurrentImage}
+                className="mt-3 text-white border-gray-600"
+              >
+                Retry
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Secondary Viewport (Split Screen) */}
         {splitScreen && (
-          <div className="w-1/2">
+          <div className="relative w-1/2 bg-black">
             <div
               ref={viewportRef2}
-              className="w-full h-full bg-black flex items-center justify-center"
-            >
-              {!isInitialized && (
-                <div className="text-gray-400">
-                  Initializing viewport 2...
-                </div>
-              )}
-            </div>
+              className="w-full h-full"
+              style={{ minHeight: inline ? "384px" : undefined }}
+            />
           </div>
         )}
       </div>
 
-      {/* Cine Controls */}
+      {/* Cine Controls — only shown for multi-frame studies */}
       {totalFrames > 1 && (
-        <div className="bg-gray-900 border-t border-gray-700 p-4">
-          {/* Playback Controls */}
-          <div className="flex items-center justify-center gap-4 mb-4">
+        <div className="bg-gray-900 border-t border-gray-700 p-3 shrink-0">
+          <div className="flex items-center justify-center gap-3 mb-3">
             <Button
               variant="outline"
               size="sm"
-              onClick={handlePreviousFrame}
+              onClick={() => setCurrentFrame((p) => Math.max(0, p - 1))}
               disabled={currentFrame === 0}
-              className="text-white border-gray-600"
+              className="text-white border-gray-600 h-7 w-7 p-0"
             >
-              <SkipBack className="w-4 h-4" />
+              <SkipBack className="w-3 h-3" />
             </Button>
-            
+
             <Button
               variant="outline"
               size="sm"
-              onClick={handlePlayPause}
-              className="text-white border-gray-600"
+              onClick={() => setIsPlaying(!isPlaying)}
+              className="text-white border-gray-600 h-7 w-7 p-0"
             >
-              {isPlaying ? (
-                <Pause className="w-4 h-4" />
-              ) : (
-                <Play className="w-4 h-4" />
-              )}
+              {isPlaying ? <Pause className="w-3 h-3" /> : <Play className="w-3 h-3" />}
             </Button>
-            
+
             <Button
               variant="outline"
               size="sm"
-              onClick={handleNextFrame}
+              onClick={() => setCurrentFrame((p) => Math.min(totalFrames - 1, p + 1))}
               disabled={currentFrame === totalFrames - 1}
-              className="text-white border-gray-600"
+              className="text-white border-gray-600 h-7 w-7 p-0"
             >
-              <SkipForward className="w-4 h-4" />
+              <SkipForward className="w-3 h-3" />
             </Button>
-            
+
             <Button
               variant="outline"
               size="sm"
               onClick={() => setLoop(!loop)}
-              className={`text-white border-gray-600 ${loop ? "bg-blue-600" : ""}`}
+              className={`text-white border-gray-600 h-7 w-7 p-0 ${loop ? "bg-blue-600" : ""}`}
             >
-              <Repeat className="w-4 h-4" />
+              <Repeat className="w-3 h-3" />
             </Button>
           </div>
 
-          {/* Frame Slider */}
-          <div className="mb-4">
-            <Slider
-              value={[currentFrame]}
-              onValueChange={handleFrameChange}
-              max={totalFrames - 1}
-              step={1}
-              className="w-full"
-            />
-            <div className="flex justify-between text-xs text-gray-400 mt-1">
-              <span>Frame: {currentFrame + 1}</span>
-              <span>Total: {totalFrames}</span>
-            </div>
-          </div>
+          <Slider
+            value={[currentFrame]}
+            onValueChange={(v) => { setCurrentFrame(v[0]); setIsPlaying(false); }}
+            max={totalFrames - 1}
+            step={1}
+            className="w-full mb-2"
+          />
 
-          {/* Speed Controls */}
-          <div className="flex items-center justify-center gap-2">
-            <span className="text-gray-400 text-sm">Speed:</span>
-            {[0.25, 0.5, 1, 2, 4].map((speed) => (
-              <Button
-                key={speed}
-                variant="outline"
-                size="sm"
-                onClick={() => handleSpeedChange(speed)}
-                className={`text-white border-gray-600 ${
-                  playbackSpeed === speed ? "bg-blue-600" : ""
-                }`}
-              >
-                {speed}x
-              </Button>
-            ))}
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-gray-400">Frame {currentFrame + 1} / {totalFrames}</span>
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-400 mr-1">Speed:</span>
+              {[0.25, 0.5, 1, 2, 4].map((speed) => (
+                <Button
+                  key={speed}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPlaybackSpeed(speed)}
+                  className={`text-white border-gray-600 h-6 px-2 text-xs ${playbackSpeed === speed ? "bg-blue-600" : ""}`}
+                >
+                  {speed}x
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
       )}
