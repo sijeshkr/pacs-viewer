@@ -25,6 +25,11 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
   },
+  // Cornerstone's DICOM decoder worker has dynamic imports and therefore
+  // requires an ESM worker bundle rather than Vite's default IIFE output.
+  worker: {
+    format: "es",
+  },
   server: {
     host: true,
     allowedHosts: [

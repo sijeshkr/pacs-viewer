@@ -12,6 +12,7 @@ import Viewer from "./pages/Viewer";
 import Dashboard from "./pages/Dashboard";
 import Patients from "./pages/Patients";
 import Studies from "./pages/Studies";
+import Integrations from "./pages/Integrations";
 
 function Router() {
   // make sure to consider if you need authentication for certain routes
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/studies" component={Studies} />
       <Route path="/studies/:id" component={StudyDetail} />
       <Route path="/viewer" component={Viewer} />
+      <Route path="/integrations" component={Integrations} />
       <Route path="/upload/:token" component={GuestUpload} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

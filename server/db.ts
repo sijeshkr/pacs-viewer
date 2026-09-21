@@ -1,6 +1,6 @@
 import { eq, desc, and, like, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, patients, studies, series, instances, reports, InsertPatient, InsertStudy, doctorPatients, InsertDoctorPatient, studyAccess, InsertStudyAccess, uploadTokens, InsertUploadToken } from "../drizzle/schema";
+import { InsertUser, users, patients, studies, series, instances, reports, InsertPatient, InsertStudy, doctorPatients, InsertDoctorPatient, studyAccess, InsertStudyAccess, uploadTokens, InsertUploadToken, integrationApiKeys, type InsertIntegrationApiKey } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -207,6 +207,188 @@ export async function getReportsByStudyId(studyId: number) {
   if (!db) return [];
   
   return await db.select().from(reports).where(eq(reports.studyId, studyId)).orderBy(desc(reports.createdAt));
+}
+
+export async function getLatestReportByStudyId(studyId: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select().from(reports)
+    .where(eq(reports.studyId, studyId))
+    .orderBy(desc(reports.updatedAt))
+    .limit(1);
+  return result[0];
+}
+
+export async function saveStudyReport(input: {
+  studyId: number;
+  reportedBy: number;
+  findings: string;
+  impression: string;
+  recommendations?: string;
+  status: "draft" | "final" | "amended";
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const latest = await getLatestReportByStudyId(input.studyId);
+  if (latest) {
+    await db.update(reports).set({
+      findings: input.findings,
+      impression: input.impression,
+      recommendations: input.recommendations ?? null,
+      status: input.status,
+      reportedBy: input.reportedBy,
+    }).where(eq(reports.id, latest.id));
+  } else {
+    await db.insert(reports).values({
+      studyId: input.studyId,
+      reportedBy: input.reportedBy,
+      findings: input.findings,
+      impression: input.impression,
+      recommendations: input.recommendations ?? null,
+      status: input.status,
+    });
+  }
+
+  if (input.status === "final" || input.status === "amended") {
+    await db.update(studies).set({ status: "reported" }).where(eq(studies.id, input.studyId));
+  }
+
+  return getLatestReportByStudyId(input.studyId);
+}
+
+export async function getStudyByDicomUid(studyUid: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select({ study: studies, patient: patients })
+    .from(studies)
+    .leftJoin(patients, eq(studies.patientId, patients.id))
+    .where(eq(studies.studyId, studyUid))
+    .limit(1);
+  return result[0];
+}
+
+export async function getStudyByExternalOrderId(externalOrderId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+
+  const result = await db.select({ study: studies, patient: patients })
+    .from(studies)
+    .leftJoin(patients, eq(studies.patientId, patients.id))
+    .where(eq(studies.externalOrderId, externalOrderId))
+    .limit(1);
+  return result[0];
+}
+
+export async function upsertInteroperabilityOrder(input: {
+  patientId: string;
+  patientName: string;
+  patientDateOfBirth?: string;
+  patientGender?: "male" | "female" | "other";
+  studyUid: string;
+  studyDate: Date;
+  modality: string;
+  description?: string;
+  bodyPart?: string;
+  referringPhysician?: string;
+  accessionNumber?: string;
+  externalOrderId: string;
+  priority?: "routine" | "urgent" | "stat";
+  createdBy: number;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  const existingOrder = await getStudyByExternalOrderId(input.externalOrderId);
+  if (existingOrder) return { ...existingOrder, created: false };
+
+  let patient = (await db.select().from(patients).where(eq(patients.patientId, input.patientId)).limit(1))[0];
+  const dateOfBirth = input.patientDateOfBirth ? new Date(`${input.patientDateOfBirth}T00:00:00.000Z`) : null;
+
+  if (!patient) {
+    const created = await db.insert(patients).values({
+      patientId: input.patientId,
+      name: input.patientName,
+      dateOfBirth,
+      gender: input.patientGender,
+      createdBy: input.createdBy,
+    });
+    patient = (await db.select().from(patients).where(eq(patients.id, Number(created[0].insertId))).limit(1))[0]!;
+  } else {
+    await db.update(patients).set({
+      name: input.patientName || patient.name,
+      dateOfBirth: dateOfBirth ?? patient.dateOfBirth,
+      gender: input.patientGender ?? patient.gender,
+    }).where(eq(patients.id, patient.id));
+    patient = (await db.select().from(patients).where(eq(patients.id, patient.id)).limit(1))[0]!;
+  }
+
+  const existingStudy = await getStudyByDicomUid(input.studyUid);
+  if (existingStudy) return { ...existingStudy, created: false };
+
+  const createdStudy = await db.insert(studies).values({
+    studyId: input.studyUid,
+    patientId: patient.id,
+    studyDate: input.studyDate,
+    modality: input.modality,
+    description: input.description,
+    bodyPart: input.bodyPart,
+    referringPhysician: input.referringPhysician,
+    accessionNumber: input.accessionNumber,
+    externalOrderId: input.externalOrderId,
+    priority: input.priority ?? "routine",
+    uploadedBy: input.createdBy,
+  });
+
+  const study = (await db.select().from(studies).where(eq(studies.id, Number(createdStudy[0].insertId))).limit(1))[0]!;
+  return { study, patient, created: true };
+}
+
+// External API key queries
+export async function createIntegrationApiKey(apiKey: InsertIntegrationApiKey) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(integrationApiKeys).values(apiKey);
+  return Number(result[0].insertId);
+}
+
+export async function listIntegrationApiKeys() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: integrationApiKeys.id,
+    name: integrationApiKeys.name,
+    keyPrefix: integrationApiKeys.keyPrefix,
+    fhirReportDeliveryUrl: integrationApiKeys.fhirReportDeliveryUrl,
+    hl7ReportDeliveryUrl: integrationApiKeys.hl7ReportDeliveryUrl,
+    isActive: integrationApiKeys.isActive,
+    createdAt: integrationApiKeys.createdAt,
+    lastUsedAt: integrationApiKeys.lastUsedAt,
+    revokedAt: integrationApiKeys.revokedAt,
+  }).from(integrationApiKeys).orderBy(desc(integrationApiKeys.createdAt));
+}
+
+export async function getActiveIntegrationApiKey(keyHash: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(integrationApiKeys)
+    .where(and(eq(integrationApiKeys.keyHash, keyHash), eq(integrationApiKeys.isActive, 1)))
+    .limit(1);
+  return result[0];
+}
+
+export async function touchIntegrationApiKey(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(integrationApiKeys).set({ lastUsedAt: new Date() }).where(eq(integrationApiKeys.id, id));
+}
+
+export async function revokeIntegrationApiKey(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(integrationApiKeys).set({ isActive: 0, revokedAt: new Date() }).where(eq(integrationApiKeys.id, id));
 }
 
 // Dashboard statistics

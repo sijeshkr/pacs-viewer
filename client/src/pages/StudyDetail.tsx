@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
 import { ArrowLeft, Calendar, User, FileText, Download, Share2, Eye } from "lucide-react";
-import { EnhancedDicomViewer } from "@/components/EnhancedDicomViewer";
+import { ClinicalDicomViewer } from "@/components/ClinicalDicomViewer";
 
 export default function StudyDetail() {
   const [, params] = useRoute("/studies/:id");
@@ -149,8 +149,14 @@ export default function StudyDetail() {
                   View and analyze medical images with advanced tools
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                <EnhancedDicomViewer imageIds={imageIds} inline />
+              <CardContent className="p-2 md:p-4">
+                <ClinicalDicomViewer
+                  studyId={studyId}
+                  imageIds={imageIds}
+                  inline
+                  patient={patient ?? null}
+                  study={study}
+                />
               </CardContent>
             </Card>
           </TabsContent>

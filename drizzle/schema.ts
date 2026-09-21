@@ -58,6 +58,8 @@ export const studies = mysqlTable("studies", {
   description: text("description"),
   bodyPart: varchar("bodyPart", { length: 128 }),
   referringPhysician: varchar("referringPhysician", { length: 255 }),
+  accessionNumber: varchar("accessionNumber", { length: 128 }),
+  externalOrderId: varchar("externalOrderId", { length: 128 }).unique(),
   status: mysqlEnum("status", ["pending", "in_progress", "completed", "reported"]).default("pending").notNull(),
   priority: mysqlEnum("priority", ["routine", "urgent", "stat"]).default("routine").notNull(),
   numberOfSeries: int("numberOfSeries").default(0),
@@ -121,6 +123,27 @@ export const reports = mysqlTable("reports", {
 
 export type Report = typeof reports.$inferSelect;
 export type InsertReport = typeof reports.$inferInsert;
+
+/**
+ * Hashed, revocable credentials used by external FHIR and HL7 integrations.
+ * The raw API key is returned only when the credential is created.
+ */
+export const integrationApiKeys = mysqlTable("integration_api_keys", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 128 }).notNull().unique(),
+  keyPrefix: varchar("keyPrefix", { length: 32 }).notNull(),
+  keyHash: varchar("keyHash", { length: 64 }).notNull().unique(),
+  fhirReportDeliveryUrl: text("fhirReportDeliveryUrl"),
+  hl7ReportDeliveryUrl: text("hl7ReportDeliveryUrl"),
+  isActive: int("isActive").default(1).notNull(),
+  createdBy: int("createdBy").notNull().references(() => users.id),
+  lastUsedAt: timestamp("lastUsedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  revokedAt: timestamp("revokedAt"),
+});
+
+export type IntegrationApiKey = typeof integrationApiKeys.$inferSelect;
+export type InsertIntegrationApiKey = typeof integrationApiKeys.$inferInsert;
 
 /**
  * Doctor-Patient relationship table
